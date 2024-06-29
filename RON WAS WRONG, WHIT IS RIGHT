@@ -1,0 +1,79 @@
+# Solution by ChatGPT and https://github.com/onealmond/hacking-lab/blob/master/cryptohack/ron-was-wrong%2Cwhit-is-right/decrypt.py
+# Solution Idea is: 
+# Finding Common Factors: The script checks each pair of moduli for a common factor using the greatest common divisor (GCD) function.
+# If a common factor is found,
+# it prints the indices of the keys and the common factor. 
+# then Computing the Private Key,
+# Once a common factor N is found, the script computes the corresponding private key. It extracts p (the common factor) and computes q
+# p // N. It then calculates Euler's totient function (phi) and the private exponent (d).
+
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Util.number import inverse, long_to_bytes, bytes_to_long
+from math import gcd
+
+def crack_rsa(public_keys, ciphertexts):
+    cracked_messages = []
+    
+    # Check for common factors among public keys
+    for i in range(len(public_keys)):
+        for j in range(i + 1, len(public_keys)):
+            N1, e1 = public_keys[i]
+            N2, e2 = public_keys[j]
+            # Calculate the GCD of the two moduli
+            common_factor = gcd(N1, N2)
+            if common_factor != 1:
+                print(f"Common factor found between key {i} and key {j}: {common_factor}")
+                
+                # Factorize the modulus using the common factor
+                p = common_factor
+                q1 = N1 // p
+                q2 = N2 // p
+
+                # Compute Euler's totient function
+                phi1 = (p - 1) * (q1 - 1)
+                phi2 = (p - 1) * (q2 - 1)
+                
+                # Compute private key d for both keys
+                d1 = inverse(e1, phi1)
+                d2 = inverse(e2, phi2)
+                
+                # Decrypt the ciphertexts for both keys
+                key1 = RSA.construct((N1, e1, d1))
+                cipher1 = PKCS1_OAEP.new(key1)
+                decrypted_message1 = cipher1.decrypt(long_to_bytes(ciphertexts[i]))
+                cracked_messages.append(decrypted_message1)
+                
+                key2 = RSA.construct((N2, e2, d2))
+                cipher2 = PKCS1_OAEP.new(key2)
+                decrypted_message2 = cipher2.decrypt(long_to_bytes(ciphertexts[j]))
+                cracked_messages.append(decrypted_message2)
+    
+    return cracked_messages
+
+# Load public keys and ciphertexts from files
+public_keys = []
+ciphertexts = []
+path = "CryptoHack Files/keys_and_messages_701dba5b1a84cb168547ec18227a7740/keys_and_messages/"
+for i in range(1, 51):
+    # Read and import the RSA public key
+    with open(f"{path}{i}.pem") as f:
+        key = RSA.importKey(f.read())
+        public_keys.append((key.n, key.e))
+
+    # Read and convert the ciphertext from hex to long integer
+    with open(f"{path}{i}.ciphertext", 'r') as f:
+        ciphertext_hex = f.read().strip()
+        ciphertexts.append(bytes_to_long(bytes.fromhex(ciphertext_hex)))
+
+# Crack RSA and print decrypted messages
+cracked_messages = crack_rsa(public_keys, ciphertexts)
+for message in cracked_messages:
+    print(message)
+
+# Output
+"""
+Common factor found between key 20 and key 33: 919031168254299342928662994540730760042229248845820491699169870943314884504551963184014786520812939038906152950817942941469675496074887272906954399256046690838233813273902630076899906873722574023918253104149453601408405078374008695616160025877687382663027910687942091698042309812910101246025081363544171351624307177908410700904833438480012985928358897861427063761678614898919524867442676631453135379994570031284289815099294504127712924001149921480778993635917803466637717023744788311275545126346774536416864472035644211758788016642401235014385037912224180351022196262011724157012443048941426178651665266181311662824205620324073087330858064769424755443807165558567191049013947419763315902476674266627953223373671797370373786249718677582213173537848582863398367624397247597103174897140005790273296171101569756006898658668311846034013183862374297777882433967015111727139360441681664840944403450472574336901043555319067050153928231938431298082827397506406624964952344826628463723499263165279281720105570577138817805451223334196017505528543229067732013216932022575286870744622250293712218581458417969597311485156075637589299870500738770767213366940656708757081771498126771190548298648709527029056697749965377697006723247968508680596118923
+b"crypto{3ucl1d_w0uld_b3_pr0ud} If you haven't already, check out https://eprint.iacr.org/2012/064.pdf"
+b'BA4DPD6O5DNL3CHIYRIW3Q48XJ2XMS8I02BYX7WNUJNGF1QLU66DT8RAU8B'
+"""
